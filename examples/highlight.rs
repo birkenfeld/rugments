@@ -12,11 +12,9 @@ use rugments::lexer::HtmlLexer;
 
 fn main() {
     let mut buf = Vec::new();
-    File::open("test100.html").unwrap().read_to_end(&mut buf).unwrap();
+    File::open("test.html").unwrap().read_to_end(&mut buf).unwrap();
     let bufstr = String::from_utf8(buf).unwrap();
-    for toks in HtmlLexer::new(&bufstr) {
-        for tok in toks {
-            println!("{:?}", tok);
-        }
+    for tok in HtmlLexer::new(&bufstr) {
+        println!("{:?}", tok);
     }
 }

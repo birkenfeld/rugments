@@ -6,6 +6,7 @@
 
 use regex::Regex;
 use std::collections::BTreeMap;
+use std::collections::VecDeque;
 use std::fmt;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -130,19 +131,19 @@ lazy_static! {
 
 pub struct HtmlLexer<'t> {
     machine: &'static Machine,
-    state: Vec<&'static str>,
-    statetokens: &'static State,
-    pos: usize,
-    text: &'t str,
+    states: Vec<&'static str>,
+    topstate: &'static State,
+    queue: VecDeque<Token<'t>>,
+    rest: &'t str,
 }
 
 impl<'t> HtmlLexer<'t> {
     pub fn new(text: &'t str) -> HtmlLexer<'t> {
         HtmlLexer { machine: &HTML_MACHINE,
-                    state: vec!["root"],
-                    statetokens: &HTML_MACHINE["root"],
-                    pos: 0,
-                    text: text }
+                    states: vec!["root"],
+                    topstate: &HTML_MACHINE["root"],
+                    queue: VecDeque::with_capacity(16),
+                    rest: text }
     }
 
     #[inline]
@@ -150,56 +151,66 @@ impl<'t> HtmlLexer<'t> {
         match action {
             No => (),
             Pop => {
-                self.state.pop();
-                self.statetokens = &self.machine[self.state.last().unwrap()];
+                self.states.pop();
+                self.topstate = &self.machine[self.states.last().unwrap()];
             }
             PopMulti(n) => {
-                for _ in 0..n { self.state.pop(); }
-                self.statetokens = &self.machine[self.state.last().unwrap()];
+                for _ in 0..n { self.states.pop(); }
+                self.topstate = &self.machine[self.states.last().unwrap()];
             }
             PushSelf(n) => {
-                let cur = self.state.last().unwrap().clone();
-                for _ in 0..n { self.state.push(cur); }
+                let cur = self.states.last().unwrap().clone();
+                for _ in 0..n { self.states.push(cur); }
             }
             Push(to) => {
-                self.state.push(to);
-                self.statetokens = &self.machine[to];
+                self.states.push(to);
+                self.topstate = &self.machine[to];
             }
             PushMulti(which) => {
-                self.state.extend(which);
-                self.statetokens = &self.machine[self.state.last().unwrap()];
+                self.states.extend(which);
+                self.topstate = &self.machine[self.states.last().unwrap()];
             }
         }
     }
 }
 
 impl<'t> Iterator for HtmlLexer<'t> {
-    type Item = Vec<Token<'t>>;
+    type Item = Token<'t>;
 
     fn next(&mut self) -> Option<Self::Item> {
-        for &(ref rx, type_action, state_action) in self.statetokens {
+        if !self.queue.is_empty() {
+            return self.queue.pop_back();
+        }
+        for &(ref rx, type_action, state_action) in self.topstate {
             match type_action {
-                T(tt) => if let Some((_, idx)) = rx.find(&self.text[self.pos..]) {
-                    self.pos += idx;
+                T(tt) => if let Some((_, idx)) = rx.find(self.rest) {
                     self.do_state_action(state_action);
-                    return Some(vec![Token { text: &self.text[self.pos-idx..self.pos],
-                                             ttype: tt }]);
+                    let (matched, rest) = self.rest.split_at(idx);
+                    self.rest = rest;
+                    return Some(Token { text: matched, ttype: tt });
                 },
-                ByGroups(groups) => if let Some(cap) = rx.captures(&self.text[self.pos..]) {
-                    self.pos += cap.pos(0).unwrap().1;
+                ByGroups(groups) => if let Some(cap) = rx.captures(&self.rest) {
+                    self.rest = &self.rest[cap.pos(0).unwrap().1..];
                     self.do_state_action(state_action);
-                    return Some(groups.iter().enumerate().map(|(i, grtt)| {
-                        Token { text: cap.at(i + 1).unwrap(), ttype: *grtt }
-                    }).collect());
+                    let mut first = None;
+                    for (i, grtt) in groups.iter().enumerate() {
+                        let tok = Token { text: cap.at(i + 1).unwrap(), ttype: *grtt };
+                        if i == 0 {
+                            first = Some(tok);
+                        } else {
+                            self.queue.push_front(tok);
+                        }
+                    }
+                    return first;
                 }
             }
         }
-        if self.pos == self.text.len() {
+        if self.rest.is_empty() {
             return None;
         }
-        let idx = self.text[self.pos..].char_indices().skip(1).next()
-                                       .map_or(self.text.len() - self.pos, |v| v.0);
-        self.pos += idx;
-        Some(vec![Token { text: &self.text[self.pos..self.pos+idx], ttype: Error }])
+        let idx = self.rest.char_indices().skip(1).next().map_or(self.rest.len(), |v| v.0);
+        let (matched, rest) = self.rest.split_at(idx);
+        self.rest = rest;
+        Some(Token { text: matched, ttype: Error })
     }
 }
