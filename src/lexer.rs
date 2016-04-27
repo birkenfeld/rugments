@@ -15,6 +15,7 @@ pub enum TokenType {
     Name,
     Comment,
     String,
+    Operator,
     Punctuation,
     Error,
 }
@@ -39,8 +40,8 @@ pub enum StateAction {
 use self::StateAction::*;
 
 pub struct Token<'t> {
-    text: &'t str,
-    ttype: TokenType
+    pub text: &'t str,
+    pub ttype: TokenType
 }
 
 impl<'t> fmt::Debug for Token<'t> {
@@ -73,55 +74,49 @@ pub fn to_machine(machine: MachineDef) -> Machine {
 
 const HTML_TOKENS: MachineDef = &[
     ("root", &[
-        (r"\A[^<&]+", T(Text), No),
-        (r"\A&\S*?;", T(Name), No),
-        (r"\A<!\[CDATA\[.*?\]\]>", T(Comment), No),
-        (r"\A<!--", T(Comment), Push("comment")),
-        (r"\A<![^>]*>", T(Comment), No),
-        (r"\A(<)(\s*)(script)(\s*)",
+        (r"(?i)\A[^<&]+", T(Text), No),
+        (r"(?i)\A&[^\s;]*;", T(Name), No),
+        (r"(?i)\A<!\[CDATA\[.*?\]\]>", T(Comment), No),
+        (r"(?i)\A<!--", T(Comment), Push("comment")),
+        (r"(?i)\A<![^>]*>", T(Comment), No),
+        (r"(?i)\A(<)(\s*)(script)(\s*)",
          ByGroups(&[Punctuation, Text, Name, Text]),
          PushMulti(&["script-content", "tag"])),
-        (r"\A(<)(\s*)(style)(\s*)",
+        (r"(?i)\A(<)(\s*)(style)(\s*)",
          ByGroups(&[Punctuation, Text, Name, Text]),
          PushMulti(&["style-content", "tag"])),
-        (r"\A(<)(\s*)([\w:.-]+)",
-         ByGroups(&[Punctuation, Text, Name]),
-         Push("tag")),
-        (r"\A(<)(\s*)(/)(\s*)([\w:.-]+)(\s*)(>)",
-         ByGroups(&[Punctuation, Text, Punctuation, Text, Name, Text, Punctuation]),
-         No),
+        (r"(?i)\A(<)(\s*)([\w:.-]+)", ByGroups(&[Punctuation, Text, Name]), Push("tag")),
+        (r"(?i)\A(<)(\s*)(/)(\s*)([\w:.-]+)(\s*)(>)",
+         ByGroups(&[Punctuation, Text, Punctuation, Text, Name, Text, Punctuation]), No),
     ]),
     ("comment", &[
-        (r"\A[^-]+", T(Comment), No),
-        (r"\A-->", T(Comment), Pop),
-        (r"\A-", T(Comment), No),
+        (r"(?i)\A[^-]+", T(Comment), No),
+        (r"(?i)\A-->", T(Comment), Pop),
+        (r"(?i)\A-", T(Comment), No),
     ]),
     ("tag", &[
-        (r"\A\s+", T(Text), No),
-        (r"\A([\w:-]+\s*)(=)(\s*)",
-         T(Name), Push("attr")), //  bygroups(Name.Attribute, Operator, Text),
-        (r"\A[\w:-]+", T(Name), No),
-        (r"\A(/?)(\s*)(>)",
-         T(Name), // bygroups(Punctuation, Text, Punctuation),
-         Pop),
+        (r"(?i)\A\s+", T(Text), No),
+        (r"(?i)\A([\w:-]+\s*)(=)(\s*)", ByGroups(&[Name, Operator, Text]), Push("attr")),
+        (r"(?i)\A[\w:-]+", T(Name), No),
+        (r"(?i)\A(/)(\s*)(>)", ByGroups(&[Punctuation, Text, Punctuation]), Pop),
+        (r"(?i)\A>", T(Punctuation), Pop),
     ]),
     ("attr", &[
-        ("\\A\".*?\"", T(String), Pop),
-        (r"\A'.*?'", T(String), Pop),
-        (r"\A[^\s>]+", T(String), Pop),
+        (r#"(?i)\A"[^"]*""#, T(String), Pop),
+        (r"(?i)\A'[^']*'", T(String), Pop),
+        (r"(?i)\A[^\s/>]+", T(String), Pop),
     ]),
     ("script-content", &[
-        (r"\A(<)(\s*)(/)(\s*)(script)(\s*)(>)",
-         T(Name),
-         // bygroups(Punctuation, Text, Punctuation, Text, Name.Tag, Text, Punctuation),
-         Pop),
-        (r"(?s)\A.+?(<\s*/\s*script\s*>)", T(Text), Pop),
+        (r"(?i)\A[^<]+", T(Text), No),
+        (r"(?i)\A(<)(\s*)(/)(\s*)(script)(\s*)(>)",
+         ByGroups(&[Punctuation, Text, Punctuation, Text, Name, Text, Punctuation]), Pop),
+        (r"(?i)\A<", T(Text), No),
     ]),
     ("style-content", &[
-        (r"\A(<)(\s*)(/)(\s*)(style)(\s*)(>)",
-         T(Name), // bygroups(Punctuation, Text, Punctuation, Text, Name.Tag, Text, Punctuation),
-         Pop),
-        (r"(?s)\A.+?(<\s*/\s*style\s*>)", T(Text), Pop),
+        (r"(?i)\A[^<]+", T(Text), No),
+        (r"(?i)\A(<)(\s*)(/)(\s*)(style)(\s*)(>)",
+         ByGroups(&[Punctuation, Text, Punctuation, Text, Name, Text, Punctuation]), Pop),
+        (r"(?i)\A<", T(Text), No),
     ]),
 ];
 
@@ -149,7 +144,7 @@ impl<'t> HtmlLexer<'t> {
     #[inline]
     fn do_state_action(&mut self, action: StateAction) {
         match action {
-            No => (),
+            No => { }
             Pop => {
                 self.states.pop();
                 self.topstate = &self.machine[self.states.last().unwrap()];
@@ -172,33 +167,29 @@ impl<'t> HtmlLexer<'t> {
             }
         }
     }
-}
 
-impl<'t> Iterator for HtmlLexer<'t> {
-    type Item = Token<'t>;
-
-    fn next(&mut self) -> Option<Self::Item> {
-        if !self.queue.is_empty() {
-            return self.queue.pop_back();
-        }
+    #[inline]
+    fn lex_next(&mut self) -> Option<Token<'t>> {
         for &(ref rx, type_action, state_action) in self.topstate {
             match type_action {
                 T(tt) => if let Some((_, idx)) = rx.find(self.rest) {
-                    self.do_state_action(state_action);
                     let (matched, rest) = self.rest.split_at(idx);
                     self.rest = rest;
+                    self.do_state_action(state_action);
                     return Some(Token { text: matched, ttype: tt });
                 },
-                ByGroups(groups) => if let Some(cap) = rx.captures(&self.rest) {
+                ByGroups(groups) => if let Some(cap) = rx.captures(self.rest) {
                     self.rest = &self.rest[cap.pos(0).unwrap().1..];
                     self.do_state_action(state_action);
                     let mut first = None;
-                    for (i, grtt) in groups.iter().enumerate() {
-                        let tok = Token { text: cap.at(i + 1).unwrap(), ttype: *grtt };
+                    for (i, &grtt) in groups.iter().enumerate() {
                         if i == 0 {
-                            first = Some(tok);
+                            first = Some(Token { text: cap.at(1).unwrap(), ttype: grtt });
                         } else {
-                            self.queue.push_front(tok);
+                            let matched = cap.at(i + 1).unwrap();
+                            if !matched.is_empty() {
+                                self.queue.push_front(Token { text: matched, ttype: grtt });
+                            }
                         }
                     }
                     return first;
@@ -212,5 +203,17 @@ impl<'t> Iterator for HtmlLexer<'t> {
         let (matched, rest) = self.rest.split_at(idx);
         self.rest = rest;
         Some(Token { text: matched, ttype: Error })
+    }
+}
+
+impl<'t> Iterator for HtmlLexer<'t> {
+    type Item = Token<'t>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        if let Some(v) = self.queue.pop_back() {
+            Some(v)
+        } else {
+            self.lex_next()
+        }
     }
 }

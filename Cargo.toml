@@ -4,5 +4,8 @@ version = "0.1.0"
 authors = ["Georg Brandl <georg@python.org>"]
 
 [dependencies]
-regex = "*"
+regex = {git = "https://github.com/rust-lang-nursery/regex"}
 lazy_static = "*"
+
+[features]
+unstable = []

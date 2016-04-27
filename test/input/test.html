@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="keywords" content="rust, rustlang, rust-lang, serde_pickle">
+
+    <title>serde_pickle - Rust</title>
+
+    <link rel="stylesheet" type="text/css" href="../main.css">
+
+    
+    
+</head>
+<body class="rustdoc">
+    <!--[if lte IE 8]>
+    <div class="warning">
+        This old browser is unsupported and will most likely display funky
+        things.
+    </div>
+    <![endif]-->
+    
+
+    <nav class="sidebar">
+        
+        <p class='location'></p>
+    </nav>
+
+    <nav class="sub">
+        <form class="search-form js-only">
+            <div class="search-container">
+                <input class="search-input" name="search"
+                       autocomplete="off"
+                       placeholder="Click or press ‘S’ to search, ‘?’ for more options…"
+                       type="search">
+            </div>
+        </form>
+    </nav>
+
+    <section id='main' class="content mod">
+<h1 class='fqn'><span class='in-band'>Crate <a class='mod' href=''>serde_pickle</a></span><span class='out-of-band'><span id='render-detail'>
+            <a id="toggle-all-docs" href="javascript:void(0)" title="collapse all docs">
+                [<span class='inner'>&#x2212;</span>]
+            </a>
+        </span><a id='src-0' class='srclink' href='../src/serde_pickle/src/lib.rs.html#7-85' title='goto source code'>[src]</a></span></h1>
+<div class='docblock'><p>Serialization and deserialization for Python&#39;s pickle format</p>
+
+<h1 id='pickle-format' class='section-header'><a href='#pickle-format'>Pickle format</a></h1>
+<p>Please see the <a href="http://docs.python.org/library/pickle">Python docs</a> for
+details on the pickle format.</p>
+
+<ul>
+<li>Sets and frozensets (Rust <code>HashSet&lt;Value&gt;</code>)</li>
+<li>Dictionaries (Rust <code>HashMap&lt;Value, Value&gt;</code>)</li>
+</ul>
+
+<h1 id='exported-api' class='section-header'><a href='#exported-api'>Exported API</a></h1>
+<p>The library exports generic serde (de)serializing functions <code>to_*</code> and
+<code>from_*</code>.  It also exports functions that produce or take only the specific
+<code>Value</code> struct exposed by this library, which supports all built-in Python
+types (notably, long integers and sets, which serde&#39;s generic types don&#39;t
+handle).  These functions, called <code>value_from_*</code> and <code>value_to_*</code>, will
+correctly (un)pickle these types.</p>
+</div><h2 id='reexports' class='section-header'><a href="#reexports">Reexports</a></h2>
+<table><tr><td><code>pub use self::ser::{<a class='struct' href='../serde_pickle/ser/struct.Serializer.html' title='serde_pickle::ser::Serializer'>Serializer</a>, <a class='fn' href='../serde_pickle/ser/fn.to_writer.html' title='serde_pickle::ser::to_writer'>to_writer</a>, <a class='fn' href='../serde_pickle/ser/fn.to_vec.html' title='serde_pickle::ser::to_vec'>to_vec</a>, <a class='fn' href='../serde_pickle/ser/fn.value_to_writer.html' title='serde_pickle::ser::value_to_writer'>value_to_writer</a>, <a class='fn' href='../serde_pickle/ser/fn.value_to_vec.html' title='serde_pickle::ser::value_to_vec'>value_to_vec</a>};</code></td></tr><tr><td><code>pub use self::de::{<a class='struct' href='../serde_pickle/de/struct.Deserializer.html' title='serde_pickle::de::Deserializer'>Deserializer</a>, <a class='fn' href='../serde_pickle/de/fn.from_iter.html' title='serde_pickle::de::from_iter'>from_iter</a>, <a class='fn' href='../serde_pickle/de/fn.from_reader.html' title='serde_pickle::de::from_reader'>from_reader</a>, <a class='fn' href='../serde_pickle/de/fn.from_slice.html' title='serde_pickle::de::from_slice'>from_slice</a>, <a class='fn' href='../serde_pickle/de/fn.value_from_iter.html' title='serde_pickle::de::value_from_iter'>value_from_iter</a>, <a class='fn' href='../serde_pickle/de/fn.value_from_reader.html' title='serde_pickle::de::value_from_reader'>value_from_reader</a>, <a class='fn' href='../serde_pickle/de/fn.value_from_slice.html' title='serde_pickle::de::value_from_slice'>value_from_slice</a>};</code></td></tr><tr><td><code>pub use self::value::{<a class='enum' href='../serde_pickle/value/enum.Value.html' title='serde_pickle::value::Value'>Value</a>, <a class='enum' href='../serde_pickle/value/enum.HashableValue.html' title='serde_pickle::value::HashableValue'>HashableValue</a>};</code></td></tr><tr><td><code>pub use self::error::{<a class='enum' href='../serde_pickle/error/enum.Error.html' title='serde_pickle::error::Error'>Error</a>, <a class='enum' href='../serde_pickle/error/enum.ErrorCode.html' title='serde_pickle::error::ErrorCode'>ErrorCode</a>, <a class='type' href='../serde_pickle/error/type.Result.html' title='serde_pickle::error::Result'>Result</a>};</code></td></tr></table><h2 id='modules' class='section-header'><a href="#modules">Modules</a></h2>
+<table>
+                
+                    <tr class=' module-item'>
+                        <td><a class='fn' href='fn.to_value.html'
+                               title='serde_pickle::to_value'>to_value</a></td>
+                        <td class='docblock short'>
+                             <p>Serialize any serde serializable object into a <code>value::Value</code>.</p>
+                        </td>
+                    </tr>
+                </table></section>
+    <section id='search' class="content hidden"></section>
+
+    <section class="footer"></section>
+
+    <aside id="help" class="hidden">
+        <div>
+            <h1 class="hidden">Help</h1>
+
+            <div class="infos">
+                <h2>Search Tricks</h2>
+
+                <p>
+                    Search functions by type signature (e.g.
+                    <code>vec -> usize</code> or <code>* -> vec</code>)
+                </p>
+            </div>
+        </div>
+    </aside>
+</body>
+</html>

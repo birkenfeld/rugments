@@ -6,7 +6,7 @@
 
 //! A port of the Pygments highlighter library to Rust.
 
-#![cfg_attr(test, feature(test))]
+#![cfg_attr(feature = "unstable", feature(test))]
 
 #[macro_use]
 extern crate lazy_static;
@@ -15,4 +15,5 @@ extern crate regex;
 pub mod lexer;
 
 #[cfg(test)]
+#[path = "../test/mod.rs"]
 mod test;

@@ -4,15 +4,17 @@
 // your option. This file may not be copied, modified, or distributed except
 // according to those terms.
 
+use std::env;
 use std::fs::File;
-use std::io::{Read, Write, stdin, stdout};
+use std::io::Read;
 
 extern crate rugments;
 use rugments::lexer::HtmlLexer;
 
 fn main() {
     let mut buf = Vec::new();
-    File::open("test.html").unwrap().read_to_end(&mut buf).unwrap();
+    let filename = env::args().nth(1).unwrap();
+    File::open(filename).unwrap().read_to_end(&mut buf).unwrap();
     let bufstr = String::from_utf8(buf).unwrap();
     for tok in HtmlLexer::new(&bufstr) {
         println!("{:?}", tok);
