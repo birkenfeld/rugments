@@ -2,10 +2,12 @@
 name = "rugments"
 version = "0.1.0"
 authors = ["Georg Brandl <georg@python.org>"]
+license = "BSD-2-Clause"
 
 [dependencies]
 regex = {git = "https://github.com/rust-lang-nursery/regex"}
 lazy_static = "*"
+typed-arena = "*"
 
 [features]
 unstable = []

@@ -1,4 +1,4 @@
-use lexer::HtmlLexer;
+use lexers::html::HtmlLexer;
 static TESTHTML: &'static [u8; 5815] = include_bytes!("input/test.html");
 
 #[test]
@@ -14,6 +14,7 @@ fn check_html() {
 #[cfg(feature = "unstable")]
 mod benches {
     extern crate test;
+    use lexers::html::HtmlLexer;
 
     fn highlight_html_nx(n: usize, b: &mut test::Bencher) {
         let mut bufstr = String::from_utf8_lossy(super::TESTHTML).into_owned();
@@ -21,7 +22,7 @@ mod benches {
             bufstr.push_str(&String::from_utf8_lossy(super::TESTHTML));
         }
         b.iter(|| {
-            for _ in ::lexer::HtmlLexer::new(&bufstr) { }
+            for _ in HtmlLexer::new(&bufstr) { }
         });
     }
 

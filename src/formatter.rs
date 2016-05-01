@@ -24,19 +24,25 @@
 // (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-use std::env;
-use std::fs::File;
-use std::io::Read;
-use std::io::stdout;
+//! Defines the Formatter trait.
 
-extern crate rugments;
-use rugments::lexers::html::HtmlLexer;
-use rugments::formatter::{Formatter, HtmlFormatter};
+use std::io::{Result, Write};
 
-fn main() {
-    let mut bufstr = String::new();
-    let filename = env::args().nth(1).unwrap();
-    let stdout = stdout();
-    File::open(filename).unwrap().read_to_string(&mut bufstr).unwrap();
-    HtmlFormatter::new().format(HtmlLexer::new(&bufstr), stdout.lock()).unwrap();
+use token::Token;
+
+
+pub trait Formatter {
+    /// Return a "style sheet" for the formatter.
+    ///
+    /// What exactly this means depends on the formatter.
+    fn get_stylesheet(&self, _arg: &str) -> String {
+        String::new()
+    }
+
+    /// Format a token source into a writer.
+    ///
+    /// The result is always an io::Result; there are no specific errors
+    /// for the formatters.
+    fn format<'a, I, W>(&mut self, source: I, out: W) -> Result<()>
+        where I: Iterator<Item=Token<'a>>, W: Write;
 }

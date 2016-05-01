@@ -24,19 +24,4 @@
 // (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-use std::env;
-use std::fs::File;
-use std::io::Read;
-use std::io::stdout;
-
-extern crate rugments;
-use rugments::lexers::html::HtmlLexer;
-use rugments::formatter::{Formatter, HtmlFormatter};
-
-fn main() {
-    let mut bufstr = String::new();
-    let filename = env::args().nth(1).unwrap();
-    let stdout = stdout();
-    File::open(filename).unwrap().read_to_string(&mut bufstr).unwrap();
-    HtmlFormatter::new().format(HtmlLexer::new(&bufstr), stdout.lock()).unwrap();
-}
+pub mod html;

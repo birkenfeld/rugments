@@ -1,130 +1,94 @@
-// Copyright (c) 2015-2016 Georg Brandl.  Licensed under the Apache License,
-// Version 2.0 <LICENSE-APACHE or http://www.apache.org/licenses/LICENSE-2.0>
-// or the MIT license <LICENSE-MIT or http://opensource.org/licenses/MIT>, at
-// your option. This file may not be copied, modified, or distributed except
-// according to those terms.
+// Copyright (c) 2006-2015 by the respective authors (see AUTHORS file).
+// All rights reserved.
+//
+// Redistribution and use in source and binary forms, with or without
+// modification, are permitted provided that the following conditions are
+// met:
+//
+// * Redistributions of source code must retain the above copyright
+//   notice, this list of conditions and the following disclaimer.
+//
+// * Redistributions in binary form must reproduce the above copyright
+//   notice, this list of conditions and the following disclaimer in the
+//   documentation and/or other materials provided with the distribution.
+//
+// THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
+// "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
+// LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR
+// A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT
+// OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
+// SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT
+// LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
+// DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
+// THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+// (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+// OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 use regex::Regex;
-use std::collections::BTreeMap;
-use std::collections::VecDeque;
-use std::fmt;
+use std::collections::{BTreeMap, VecDeque};
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum TokenType {
-    Text,
-    Name,
-    Comment,
-    String,
-    Operator,
-    Punctuation,
-    Error,
+use token::{Token, TokenType};
+use macros::{MachineDef, RuleDef};
+
+pub trait Lexer<'t>: Iterator<Item=Token<'t>> {
+    // Currently unclear which other methods belong here.
 }
-use self::TokenType::*;
+
+#[derive(Debug, PartialEq, Eq)]
+pub struct Rule(Regex, MatchAction, StateAction);
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum TypeAction {
-    T(TokenType),
+pub enum MatchAction {
+    Single(TokenType),
     ByGroups(&'static [TokenType]),
 }
-use self::TypeAction::*;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum StateAction {
-    No,
+    None,
     Pop,
     PopMulti(usize),
     Push(&'static str),
     PushMulti(&'static [&'static str]),
     PushSelf(usize),
 }
-use self::StateAction::*;
 
-pub struct Token<'t> {
-    pub text: &'t str,
-    pub ttype: TokenType
-}
+pub struct State(Vec<Rule>);
 
-impl<'t> fmt::Debug for Token<'t> {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{:-50} {:?}", format!("{:?}", self.text), self.ttype)
+pub struct Machine(BTreeMap<&'static str, State>);
+
+impl Machine {
+    pub fn get_state<'a>(&'a self, state: &str) -> &'a State {
+        &self.0[state]
     }
-}
 
-pub type RuleDef = (&'static str, TypeAction, StateAction);
-pub type StateDef = (&'static str, &'static [RuleDef]);
-pub type MachineDef = &'static [StateDef];
-
-pub type Rule = (Regex, TypeAction, StateAction);
-pub type State = Vec<Rule>;
-pub type Machine = BTreeMap<&'static str, State>;
-
-pub fn to_machine(machine: MachineDef) -> Machine {
-    let mut map = BTreeMap::new();
-    for &(statename, statedef) in machine {
-        let mut rules = Vec::new();
-        for ruledef in statedef {
-            // CHECK stuff!
-            rules.push((Regex::new(ruledef.0).unwrap(),
-                        ruledef.1, ruledef.2));
+    pub fn convert(machine: MachineDef) -> Machine {
+        let mut map = BTreeMap::new();
+        for &(statename, statedef) in machine {
+            let mut rules = Vec::new();
+            for ruledef in statedef {
+                // TODO: CHECK stuff!
+                match *ruledef {
+                    RuleDef::Regex(rx, maction, saction) => {
+                        rules.push(Rule(Regex::new(rx).unwrap(), maction, saction));
+                    }
+                    // Words(words, maction, saction) => {
+                    //     // XXX
+                    // }
+                    RuleDef::Default(saction) => {
+                        rules.push(Rule(Regex::new("").unwrap(),
+                                        MatchAction::Single(TokenType::Text), saction));
+                    }
+                    _ => {}
+                }
+            }
+            map.insert(statename, State(rules));
         }
-        map.insert(statename, rules);
+        Machine(map)
     }
-    map
 }
 
-const HTML_TOKENS: MachineDef = &[
-    ("root", &[
-        (r"(?i)\A[^<&]+", T(Text), No),
-        (r"(?i)\A&[^\s;]*;", T(Name), No),
-        (r"(?i)\A<!\[CDATA\[.*?\]\]>", T(Comment), No),
-        (r"(?i)\A<!--", T(Comment), Push("comment")),
-        (r"(?i)\A<![^>]*>", T(Comment), No),
-        (r"(?i)\A(<)(\s*)(script)(\s*)",
-         ByGroups(&[Punctuation, Text, Name, Text]),
-         PushMulti(&["script-content", "tag"])),
-        (r"(?i)\A(<)(\s*)(style)(\s*)",
-         ByGroups(&[Punctuation, Text, Name, Text]),
-         PushMulti(&["style-content", "tag"])),
-        (r"(?i)\A(<)(\s*)([\w:.-]+)", ByGroups(&[Punctuation, Text, Name]), Push("tag")),
-        (r"(?i)\A(<)(\s*)(/)(\s*)([\w:.-]+)(\s*)(>)",
-         ByGroups(&[Punctuation, Text, Punctuation, Text, Name, Text, Punctuation]), No),
-    ]),
-    ("comment", &[
-        (r"(?i)\A[^-]+", T(Comment), No),
-        (r"(?i)\A-->", T(Comment), Pop),
-        (r"(?i)\A-", T(Comment), No),
-    ]),
-    ("tag", &[
-        (r"(?i)\A\s+", T(Text), No),
-        (r"(?i)\A([\w:-]+\s*)(=)(\s*)", ByGroups(&[Name, Operator, Text]), Push("attr")),
-        (r"(?i)\A[\w:-]+", T(Name), No),
-        (r"(?i)\A(/)(\s*)(>)", ByGroups(&[Punctuation, Text, Punctuation]), Pop),
-        (r"(?i)\A>", T(Punctuation), Pop),
-    ]),
-    ("attr", &[
-        (r#"(?i)\A"[^"]*""#, T(String), Pop),
-        (r"(?i)\A'[^']*'", T(String), Pop),
-        (r"(?i)\A[^\s/>]+", T(String), Pop),
-    ]),
-    ("script-content", &[
-        (r"(?i)\A[^<]+", T(Text), No),
-        (r"(?i)\A(<)(\s*)(/)(\s*)(script)(\s*)(>)",
-         ByGroups(&[Punctuation, Text, Punctuation, Text, Name, Text, Punctuation]), Pop),
-        (r"(?i)\A<", T(Text), No),
-    ]),
-    ("style-content", &[
-        (r"(?i)\A[^<]+", T(Text), No),
-        (r"(?i)\A(<)(\s*)(/)(\s*)(style)(\s*)(>)",
-         ByGroups(&[Punctuation, Text, Punctuation, Text, Name, Text, Punctuation]), Pop),
-        (r"(?i)\A<", T(Text), No),
-    ]),
-];
-
-lazy_static! {
-    pub static ref HTML_MACHINE: Machine = to_machine(HTML_TOKENS);
-}
-
-pub struct HtmlLexer<'t> {
+pub struct RegexLexer<'t> {
     machine: &'static Machine,
     states: Vec<&'static str>,
     topstate: &'static State,
@@ -132,64 +96,64 @@ pub struct HtmlLexer<'t> {
     rest: &'t str,
 }
 
-impl<'t> HtmlLexer<'t> {
-    pub fn new(text: &'t str) -> HtmlLexer<'t> {
-        HtmlLexer { machine: &HTML_MACHINE,
-                    states: vec!["root"],
-                    topstate: &HTML_MACHINE["root"],
-                    queue: VecDeque::with_capacity(16),
-                    rest: text }
+impl<'t> RegexLexer<'t> {
+    pub fn new(machine: &'static Machine, initstate: &'static str, text: &'t str)
+               -> RegexLexer<'t> {
+        RegexLexer { machine: machine,
+                     states: vec![initstate],
+                     topstate: machine.get_state(initstate),
+                     queue: VecDeque::with_capacity(16),
+                     rest: text }
     }
 
     #[inline]
     fn do_state_action(&mut self, action: StateAction) {
         match action {
-            No => { }
-            Pop => {
+            StateAction::None => { }
+            StateAction::Pop => {
                 self.states.pop();
-                self.topstate = &self.machine[self.states.last().unwrap()];
+                self.topstate = &self.machine.get_state(self.states.last().unwrap());
             }
-            PopMulti(n) => {
+            StateAction::PopMulti(n) => {
                 for _ in 0..n { self.states.pop(); }
-                self.topstate = &self.machine[self.states.last().unwrap()];
+                self.topstate = &self.machine.get_state(self.states.last().unwrap());
             }
-            PushSelf(n) => {
+            StateAction::PushSelf(n) => {
                 let cur = self.states.last().unwrap().clone();
                 for _ in 0..n { self.states.push(cur); }
             }
-            Push(to) => {
+            StateAction::Push(to) => {
                 self.states.push(to);
-                self.topstate = &self.machine[to];
+                self.topstate = &self.machine.get_state(to);
             }
-            PushMulti(which) => {
+            StateAction::PushMulti(which) => {
                 self.states.extend(which);
-                self.topstate = &self.machine[self.states.last().unwrap()];
+                self.topstate = &self.machine.get_state(self.states.last().unwrap());
             }
         }
     }
 
     #[inline]
     fn lex_next(&mut self) -> Option<Token<'t>> {
-        for &(ref rx, type_action, state_action) in self.topstate {
+        for &Rule(ref rx, type_action, state_action) in &self.topstate.0 {
             match type_action {
-                T(tt) => if let Some((_, idx)) = rx.find(self.rest) {
+                MatchAction::Single(ttype) => if let Some((_, idx)) = rx.find(self.rest) {
                     let (matched, rest) = self.rest.split_at(idx);
                     self.rest = rest;
                     self.do_state_action(state_action);
-                    return Some(Token { text: matched, ttype: tt });
+                    return Some(Token { text: matched, ttype: ttype });
                 },
-                ByGroups(groups) => if let Some(cap) = rx.captures(self.rest) {
+                MatchAction::ByGroups(groups) => if let Some(cap) = rx.captures(self.rest) {
                     self.rest = &self.rest[cap.pos(0).unwrap().1..];
                     self.do_state_action(state_action);
                     let mut first = None;
-                    for (i, &grtt) in groups.iter().enumerate() {
+                    for (i, &group_ttype) in groups.iter().enumerate() {
+                        let matched = cap.at(i + 1).unwrap();
+                        let tok = Token { text: matched, ttype: group_ttype };
                         if i == 0 {
-                            first = Some(Token { text: cap.at(1).unwrap(), ttype: grtt });
-                        } else {
-                            let matched = cap.at(i + 1).unwrap();
-                            if !matched.is_empty() {
-                                self.queue.push_front(Token { text: matched, ttype: grtt });
-                            }
+                            first = Some(tok);
+                        } else if !matched.is_empty() {
+                            self.queue.push_front(tok);
                         }
                     }
                     return first;
@@ -202,11 +166,11 @@ impl<'t> HtmlLexer<'t> {
         let idx = self.rest.char_indices().skip(1).next().map_or(self.rest.len(), |v| v.0);
         let (matched, rest) = self.rest.split_at(idx);
         self.rest = rest;
-        Some(Token { text: matched, ttype: Error })
+        Some(Token { text: matched, ttype: TokenType::Error })
     }
 }
 
-impl<'t> Iterator for HtmlLexer<'t> {
+impl<'t> Iterator for RegexLexer<'t> {
     type Item = Token<'t>;
 
     fn next(&mut self) -> Option<Self::Item> {
